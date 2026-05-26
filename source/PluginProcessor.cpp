@@ -9,9 +9,35 @@ StereoCompressorProcessor::StereoCompressorProcessor()
 {
     for (int ch = 0; ch < 2; ++ch)
     {
-        inputLevels[ch].store(-60.0f);
-        outputLevels[ch].store(-60.0f);
+        inputLevels[ch].store(-90.0f);
+        outputLevels[ch].store(-90.0f);
     }
+    std::fill(fftFifo.begin(),    fftFifo.end(),    0.0f);
+    std::fill(fftPending.begin(), fftPending.end(), 0.0f);
+}
+
+void StereoCompressorProcessor::pushSampleToFFTFifo(float sample)
+{
+    if (fftFifoIdx >= kFFTSize)
+    {
+        // Solo se l'editor ha già consumato il blocco precedente
+        if (! fftBlockReady.load(std::memory_order_acquire))
+        {
+            std::copy(fftFifo.begin(), fftFifo.end(), fftPending.begin());
+            fftBlockReady.store(true, std::memory_order_release);
+        }
+        fftFifoIdx = 0;
+    }
+    fftFifo[(size_t) fftFifoIdx++] = sample;
+}
+
+bool StereoCompressorProcessor::consumeFFTBlock(float* dst)
+{
+    if (! fftBlockReady.load(std::memory_order_acquire))
+        return false;
+    std::copy(fftPending.begin(), fftPending.end(), dst);
+    fftBlockReady.store(false, std::memory_order_release);
+    return true;
 }
 
 float StereoCompressorProcessor::ratioFromIndex(int idx)
@@ -123,16 +149,20 @@ void StereoCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     float* left  = buffer.getWritePointer(0);
     float* right = buffer.getWritePointer(1);
 
-    // ── Misura livello input (peak per blocco) ──
+    // ── Misura livello input (peak per blocco) + push FFT FIFO ──
     {
         float pL = 0.0f, pR = 0.0f;
         for (int i = 0; i < numSamples; ++i)
         {
-            pL = std::max(pL, std::abs(left[i]));
-            pR = std::max(pR, std::abs(right[i]));
+            const float l = left[i];
+            const float r = right[i];
+            pL = std::max(pL, std::abs(l));
+            pR = std::max(pR, std::abs(r));
+            // Mono sum per spettro (input pre-filtri)
+            pushSampleToFFTFifo(0.5f * (l + r));
         }
-        inputLevels[0].store(juce::Decibels::gainToDecibels(pL, -60.0f));
-        inputLevels[1].store(juce::Decibels::gainToDecibels(pR, -60.0f));
+        inputLevels[0].store(juce::Decibels::gainToDecibels(pL, -90.0f));
+        inputLevels[1].store(juce::Decibels::gainToDecibels(pR, -90.0f));
     }
 
     // ── Leggi parametri (una volta per blocco) ──
@@ -237,8 +267,8 @@ void StereoCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             pL = std::max(pL, std::abs(left[i]));
             pR = std::max(pR, std::abs(right[i]));
         }
-        outputLevels[0].store(juce::Decibels::gainToDecibels(pL, -60.0f));
-        outputLevels[1].store(juce::Decibels::gainToDecibels(pR, -60.0f));
+        outputLevels[0].store(juce::Decibels::gainToDecibels(pL, -90.0f));
+        outputLevels[1].store(juce::Decibels::gainToDecibels(pR, -90.0f));
     }
 }
 

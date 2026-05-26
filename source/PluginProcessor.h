@@ -40,7 +40,21 @@ public:
 
     static float ratioFromIndex(int idx);
 
+    // ── FFT FIFO (input pre-filtri, consumato dall'editor) ──
+    static constexpr int kFFTOrder = 11;
+    static constexpr int kFFTSize  = 1 << kFFTOrder;   // 2048
+
+    // Returns true and fills dst (kFFTSize floats) if a fresh block is ready.
+    bool consumeFFTBlock(float* dst);
+
 private:
+    void pushSampleToFFTFifo(float sample);
+
+    std::array<float, kFFTSize> fftFifo {};
+    std::array<float, kFFTSize> fftPending {};
+    int  fftFifoIdx { 0 };
+    std::atomic<bool> fftBlockReady { false };
+
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     // Compressore (envelope follower esponenziale)

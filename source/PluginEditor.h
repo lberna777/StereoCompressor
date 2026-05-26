@@ -3,7 +3,7 @@
 #include "PluginProcessor.h"
 #include "LookAndFeel.h"
 
-// ── Componente custom: display risposta in frequenza + GR overlay ──
+// ── Componente custom: spettro input + filter response + GR overlay ──
 class FreqResponseDisplay : public juce::Component,
                              private juce::Timer
 {
@@ -17,8 +17,17 @@ private:
     void timerCallback() override;
 
     StereoCompressorProcessor& processor;
-    float lastHp { -1.0f };
-    float lastLp { -1.0f };
+
+    // FFT plumbing
+    juce::dsp::FFT fft { StereoCompressorProcessor::kFFTOrder };
+    juce::dsp::WindowingFunction<float> window {
+        (size_t) StereoCompressorProcessor::kFFTSize,
+        juce::dsp::WindowingFunction<float>::hann };
+    std::array<float, StereoCompressorProcessor::kFFTSize * 2> fftWork {};
+
+    static constexpr int kBins = 160;
+    std::array<float, kBins> spectrumDB {};
+
     float displayedGR { 0.0f };
 };
 
@@ -39,8 +48,12 @@ private:
 
     StereoCompressorProcessor& processor;
     Side side;
-    float displayedL { -60.0f };
-    float displayedR { -60.0f };
+    float displayedL { -90.0f };
+    float displayedR { -90.0f };
+    float peakHoldL  { -90.0f };
+    float peakHoldR  { -90.0f };
+    int   peakHoldCountL { 0 };
+    int   peakHoldCountR { 0 };
 };
 
 // ── Editor principale ──
