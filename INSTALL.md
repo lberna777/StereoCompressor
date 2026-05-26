@@ -194,9 +194,9 @@ Devi vedere: `CMakeLists.txt`, `source/`, `README.md`, `INSTALL.md`.
 
 ## Step 6 — Compila
 
-### Configura (genera il progetto Xcode):
+### Configura:
 ```bash
-cmake -B build -G Xcode -DCMAKE_BUILD_TYPE=Release
+cmake -B build -DCMAKE_BUILD_TYPE=Release
 ```
 
 Prima volta: scarica JUCE 8.0.8 da GitHub (~300 MB, 1-3 min a seconda della connessione). Output finale atteso:
@@ -206,19 +206,24 @@ Prima volta: scarica JUCE 8.0.8 da GitHub (~300 MB, 1-3 min a seconda della conn
 -- Build files have been written to: .../StereoCompressor/build
 ```
 
+> **Nota**: questo usa il generatore di default (Unix Makefiles), che richiede solo le Command Line Tools. Se hai installato **Xcode completo** dall'App Store puoi aggiungere `-G Xcode` per ottenere un progetto Xcode (utile se vuoi aprire il codice nell'IDE). **Non aggiungere `-G Xcode` se hai solo le CLT** — CMake fallisce con un errore fuorviante ("Xcode 1.5 not supported").
+
 ### Compila:
 ```bash
-cmake --build build --config Release
+cmake --build build --config Release -j
 ```
+
+`-j` parallellizza usando tutti i core disponibili (build più veloce).
 
 5-15 minuti. Stampa centinaia di righe `[ XX%] Building CXX object ...`. Output finale atteso:
 ```
 ** BUILD SUCCEEDED **
 ```
 
-### Fix — *"CMake Error: Xcode could not be found"*
-Devi accettare la licenza Xcode:
+### Fix — *"CMake Error: Xcode 1.5 not supported"* o *"Xcode could not be found"*
+Hai solo le Command Line Tools, non Xcode completo. Soluzione: rimuovi `-G Xcode` dal comando (è quello che fa la doc qui sopra). Se vuoi davvero il generatore Xcode, installa Xcode dall'App Store e poi:
 ```bash
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 sudo xcodebuild -license accept
 ```
 
@@ -233,16 +238,16 @@ Poi riprova `cmake -B build ...`.
 Versione di JUCE incompatibile con Xcode molto recente. Cancella e riprova (riscarica versione aggiornata):
 ```bash
 rm -rf build
-cmake -B build -G Xcode -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j
 ```
 
 ### Fix — Build si blocca su *"AudioUnitSDK"* o errori di linking AU
 Su Xcode 16 a volte serve forzare il SDK target. Riprova così:
 ```bash
 rm -rf build
-cmake -B build -G Xcode -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_SYSROOT=macosx
-cmake --build build --config Release
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_SYSROOT=macosx
+cmake --build build --config Release -j
 ```
 
 ### Fix — *"FetchContent failed: could not clone JUCE"*
@@ -375,7 +380,7 @@ Poi riapri Logic e fai **Reset & Rescan**.
 
 ```bash
 cd ~/Idee/StereoCompressor      # o dove hai il progetto
-cmake --build build --config Release
+cmake --build build --config Release -j
 xattr -cr ~/Library/Audio/Plug-Ins/Components/"Stereo Compressor.component"
 ```
 
@@ -391,8 +396,8 @@ rm -rf build
 rm -rf ~/Library/Audio/Plug-Ins/Components/"Stereo Compressor.component"
 rm -rf ~/Library/Audio/Plug-Ins/VST3/"Stereo Compressor.vst3"
 rm -rf ~/Library/Caches/AudioUnitCache
-cmake -B build -G Xcode -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j
 xattr -cr ~/Library/Audio/Plug-Ins/Components/"Stereo Compressor.component"
 xattr -cr ~/Library/Audio/Plug-Ins/VST3/"Stereo Compressor.vst3"
 auval -v aufx Scmp Mypl
@@ -406,8 +411,8 @@ Se questa sequenza esce con `AU VALIDATION SUCCEEDED` → in Logic funzionerà a
 
 ```bash
 cd ~/Idee/StereoCompressor
-cmake -B build -G Xcode -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j
 xattr -cr ~/Library/Audio/Plug-Ins/Components/"Stereo Compressor.component"
 xattr -cr ~/Library/Audio/Plug-Ins/VST3/"Stereo Compressor.vst3"
 ```
