@@ -45,6 +45,11 @@ juce_add_plugin(StereoCompressor
     HARDENED_RUNTIME_ENABLED FALSE
 )
 
+# Genera JuceHeader.h (incluso da PluginProcessor.h e PluginEditor.h).
+# Senza questa riga, la compilazione fallisce con:
+#   fatal error: 'JuceHeader.h' file not found
+juce_generate_juce_header(StereoCompressor)
+
 target_sources(StereoCompressor PRIVATE
     source/PluginProcessor.cpp
     source/PluginEditor.cpp

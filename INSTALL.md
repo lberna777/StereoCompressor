@@ -234,6 +234,15 @@ sudo xcode-select -s /Library/Developer/CommandLineTools
 ```
 Poi riprova `cmake -B build ...`.
 
+### Fix — *"fatal error: 'JuceHeader.h' file not found"*
+Mancava `juce_generate_juce_header(StereoCompressor)` in [CMakeLists.txt](CMakeLists.txt). Già aggiunto nel repo dalla versione corrente. Se sei su un clone vecchio, fai `git pull` e ricompila:
+```bash
+git pull
+rm -rf build
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j
+```
+
 ### Fix — Build fallisce con *"error: 'std::byte' has not been declared"* o errori in JUCE
 Versione di JUCE incompatibile con Xcode molto recente. Cancella e riprova (riscarica versione aggiornata):
 ```bash
