@@ -175,7 +175,7 @@ Deve essere `≥ 3.22`.
 
 ## Step 5 — Posiziona il progetto
 
-Se il progetto è già in `~/Idee/StereoCompressor` (o ovunque) → skip.
+Se il progetto è già in `~/Sviluppo/audio/StereoCompressor` (o ovunque) → skip.
 
 Altrimenti, esempio se hai uno zip:
 ```bash
@@ -388,7 +388,7 @@ Poi riapri Logic e fai **Reset & Rescan**.
 ## Aggiornare dopo aver modificato il codice
 
 ```bash
-cd ~/Idee/StereoCompressor      # o dove hai il progetto
+cd ~/Sviluppo/audio/StereoCompressor      # o dove hai il progetto
 cmake --build build --config Release -j
 xattr -cr ~/Library/Audio/Plug-Ins/Components/"Stereo Compressor.component"
 ```
@@ -400,7 +400,7 @@ Non serve riconfigurare CMake né riscaricare JUCE — solo `--build`. Logic ric
 ## Build da zero pulito (se qualcosa va storto)
 
 ```bash
-cd ~/Idee/StereoCompressor
+cd ~/Sviluppo/audio/StereoCompressor
 rm -rf build
 rm -rf ~/Library/Audio/Plug-Ins/Components/"Stereo Compressor.component"
 rm -rf ~/Library/Audio/Plug-Ins/VST3/"Stereo Compressor.vst3"
@@ -419,7 +419,7 @@ Se questa sequenza esce con `AU VALIDATION SUCCEEDED` → in Logic funzionerà a
 ## Riassunto comandi minimi (per chi ha già tutto installato)
 
 ```bash
-cd ~/Idee/StereoCompressor
+cd ~/Sviluppo/audio/StereoCompressor
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j
 xattr -cr ~/Library/Audio/Plug-Ins/Components/"Stereo Compressor.component"
