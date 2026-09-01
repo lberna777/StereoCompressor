@@ -20,7 +20,6 @@ void StereoCompressorProcessor::pushSampleToFFTFifo(float sample)
 {
     if (fftFifoIdx >= kFFTSize)
     {
-        // Solo se l'editor ha già consumato il blocco precedente
         if (! fftBlockReady.load(std::memory_order_acquire))
         {
             std::copy(fftFifo.begin(), fftFifo.end(), fftPending.begin());
@@ -40,16 +39,36 @@ bool StereoCompressorProcessor::consumeFFTBlock(float* dst)
     return true;
 }
 
-float StereoCompressorProcessor::ratioFromIndex(int idx)
+juce::dsp::IIR::Coefficients<float>::Ptr
+StereoCompressorProcessor::makeHighPassWithQ(double sr, float freq, float Q)
 {
-    switch (idx)
-    {
-        case 0: return 4.0f;
-        case 1: return 8.0f;
-        case 2: return 12.0f;
-        case 3: return 20.0f;
-        default: return 4.0f;
-    }
+    const float w0    = 2.0f * juce::MathConstants<float>::pi * freq / (float)sr;
+    const float sinW  = std::sin(w0);
+    const float cosW  = std::cos(w0);
+    const float alpha = sinW / (2.0f * Q);
+    const float b0    =  (1.0f + cosW) * 0.5f;
+    const float b1    = -(1.0f + cosW);
+    const float b2    =  (1.0f + cosW) * 0.5f;
+    const float a0    =   1.0f + alpha;
+    const float a1    =  -2.0f * cosW;
+    const float a2    =   1.0f - alpha;
+    return new juce::dsp::IIR::Coefficients<float>(b0, b1, b2, a0, a1, a2);
+}
+
+juce::dsp::IIR::Coefficients<float>::Ptr
+StereoCompressorProcessor::makeLowPassWithQ(double sr, float freq, float Q)
+{
+    const float w0    = 2.0f * juce::MathConstants<float>::pi * freq / (float)sr;
+    const float sinW  = std::sin(w0);
+    const float cosW  = std::cos(w0);
+    const float alpha = sinW / (2.0f * Q);
+    const float b0    =  (1.0f - cosW) * 0.5f;
+    const float b1    =   1.0f - cosW;
+    const float b2    =  (1.0f - cosW) * 0.5f;
+    const float a0    =   1.0f + alpha;
+    const float a1    =  -2.0f * cosW;
+    const float a2    =   1.0f - alpha;
+    return new juce::dsp::IIR::Coefficients<float>(b0, b1, b2, a0, a1, a2);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout
@@ -64,9 +83,17 @@ StereoCompressorProcessor::createParameterLayout()
         juce::AudioParameterFloatAttributes().withLabel("Hz")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "hpQ", "HP Q",
+        juce::NormalisableRange<float>(0.1f, 6.0f, 0.01f, 0.5f), 0.707f));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "lpFreq", "Lo-Pass",
         juce::NormalisableRange<float>(2000.0f, 20000.0f, 10.0f, 0.5f), 20000.0f,
         juce::AudioParameterFloatAttributes().withLabel("Hz")));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "lpQ", "LP Q",
+        juce::NormalisableRange<float>(0.1f, 6.0f, 0.01f, 0.5f), 0.707f));
 
     // ── Compressore ──
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -74,10 +101,10 @@ StereoCompressorProcessor::createParameterLayout()
         juce::NormalisableRange<float>(-60.0f, 0.0f, 0.1f), -12.0f,
         juce::AudioParameterFloatAttributes().withLabel("dB")));
 
-    params.push_back(std::make_unique<juce::AudioParameterChoice>(
-        "ratioSel", "Ratio",
-        juce::StringArray { "4:1", "8:1", "12:1", "20:1" },
-        0)); // default 4:1
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "ratio", "Ratio",
+        juce::NormalisableRange<float>(1.0f, 20.0f, 0.01f, 0.35f), 4.0f,
+        juce::AudioParameterFloatAttributes().withLabel(":1")));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "attack", "Attack",
@@ -91,18 +118,18 @@ StereoCompressorProcessor::createParameterLayout()
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "makeup", "Makeup",
-        juce::NormalisableRange<float>(0.0f, 24.0f, 0.1f), 0.0f,
+        juce::NormalisableRange<float>(-12.0f, 12.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel("dB")));
 
-    // ── HABISSO saturation ──
+    // ── HABISS saturation ──
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "habisso", "Habisso",
+        "habiss", "Habiss",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel("%")));
 
-    // ── Stereo widener ──
+    // ── Stereo widener (Paralarva) ──
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "width", "Width",
+        "paralarva", "Paralarva",
         juce::NormalisableRange<float>(0.0f, 2.0f, 0.01f), 1.3f));
 
     return { params.begin(), params.end() };
@@ -116,7 +143,7 @@ void StereoCompressorProcessor::prepareToPlay(double sampleRate, int samplesPerB
     juce::dsp::ProcessSpec spec;
     spec.sampleRate       = sampleRate;
     spec.maximumBlockSize = (juce::uint32) samplesPerBlock;
-    spec.numChannels      = 1; // un filtro mono per canale
+    spec.numChannels      = 1;
 
     for (int ch = 0; ch < 2; ++ch)
     {
@@ -129,14 +156,16 @@ void StereoCompressorProcessor::prepareToPlay(double sampleRate, int samplesPerB
     const double rampSec = 0.05;
     hpFreqSmoothed.reset(sampleRate, rampSec);
     lpFreqSmoothed.reset(sampleRate, rampSec);
-    habissoSmoothed.reset(sampleRate, rampSec);
+    habissSmoothed.reset(sampleRate, rampSec);
 
-    hpFreqSmoothed.setCurrentAndTargetValue(apvts.getRawParameterValue("hpFreq")->load());
-    lpFreqSmoothed.setCurrentAndTargetValue(apvts.getRawParameterValue("lpFreq")->load());
-    habissoSmoothed.setCurrentAndTargetValue(apvts.getRawParameterValue("habisso")->load());
+    hpFreqSmoothed.setCurrentAndTargetValue(apvts.getRawParameterValue("hpFreq"  )->load());
+    lpFreqSmoothed.setCurrentAndTargetValue(apvts.getRawParameterValue("lpFreq"  )->load());
+    habissSmoothed.setCurrentAndTargetValue(apvts.getRawParameterValue("habiss"  )->load());
 
-    lastHpFreq = -1.0f; // forza ricalcolo coeff. al primo sample
+    lastHpFreq = -1.0f;
     lastLpFreq = -1.0f;
+    lastHpQ    = -1.0f;
+    lastLpQ    = -1.0f;
 }
 
 void StereoCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer,
@@ -149,7 +178,7 @@ void StereoCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     float* left  = buffer.getWritePointer(0);
     float* right = buffer.getWritePointer(1);
 
-    // ── Misura livello input (peak per blocco) + push FFT FIFO ──
+    // ── Misura livello input + push FFT FIFO ──
     {
         float pL = 0.0f, pR = 0.0f;
         for (int i = 0; i < numSamples; ++i)
@@ -158,7 +187,6 @@ void StereoCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             const float r = right[i];
             pL = std::max(pL, std::abs(l));
             pR = std::max(pR, std::abs(r));
-            // Mono sum per spettro (input pre-filtri)
             pushSampleToFFTFifo(0.5f * (l + r));
         }
         inputLevels[0].store(juce::Decibels::gainToDecibels(pL, -90.0f));
@@ -166,17 +194,20 @@ void StereoCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     }
 
     // ── Leggi parametri (una volta per blocco) ──
-    const float threshold = apvts.getRawParameterValue("threshold")->load();
-    const int   ratioIdx  = (int) apvts.getRawParameterValue("ratioSel")->load();
-    const float ratio     = ratioFromIndex(ratioIdx);
-    const float attackMs  = apvts.getRawParameterValue("attack")->load();
-    const float releaseMs = apvts.getRawParameterValue("release")->load();
-    const float makeup    = apvts.getRawParameterValue("makeup")->load();
-    const float width     = apvts.getRawParameterValue("width")->load();
+    const float threshold  = apvts.getRawParameterValue("threshold" )->load();
+    const float ratio      = apvts.getRawParameterValue("ratio"     )->load();
+    const float attackMs   = apvts.getRawParameterValue("attack"    )->load();
+    const float releaseMs  = apvts.getRawParameterValue("release"   )->load();
+    const float makeup     = apvts.getRawParameterValue("makeup"    )->load();
+    const float paralarva  = apvts.getRawParameterValue("paralarva" )->load();
+    const float hpQParam   = juce::jlimit(0.1f, 6.0f,
+                                 apvts.getRawParameterValue("hpQ")->load());
+    const float lpQParam   = juce::jlimit(0.1f, 6.0f,
+                                 apvts.getRawParameterValue("lpQ")->load());
 
     hpFreqSmoothed .setTargetValue(apvts.getRawParameterValue("hpFreq" )->load());
     lpFreqSmoothed .setTargetValue(apvts.getRawParameterValue("lpFreq" )->load());
-    habissoSmoothed.setTargetValue(apvts.getRawParameterValue("habisso")->load());
+    habissSmoothed .setTargetValue(apvts.getRawParameterValue("habiss" )->load());
 
     attackCoeff  = std::exp(-1.0f / (float(currentSampleRate) * attackMs  * 0.001f));
     releaseCoeff = std::exp(-1.0f / (float(currentSampleRate) * releaseMs * 0.001f));
@@ -185,36 +216,40 @@ void StereoCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     for (int i = 0; i < numSamples; ++i)
     {
-        // ── Update coefficienti HP/LP se la freq (smoothed) è cambiata ──
+        // Update coefficienti HP/LP se freq o Q sono cambiati
         const float hpF = hpFreqSmoothed.getNextValue();
         const float lpF = lpFreqSmoothed.getNextValue();
 
-        if (std::abs(hpF - lastHpFreq) > 1.0f)
+        if (std::abs(hpF - lastHpFreq) > 0.5f || std::abs(hpQParam - lastHpQ) > 0.001f)
         {
-            auto c = juce::dsp::IIR::Coefficients<float>::makeHighPass(
-                currentSampleRate, juce::jlimit(20.0f, 500.0f, hpF));
+            auto c = makeHighPassWithQ(currentSampleRate,
+                                       juce::jlimit(20.0f, 500.0f, hpF),
+                                       hpQParam);
             hpFilter[0].coefficients = c;
             hpFilter[1].coefficients = c;
             lastHpFreq = hpF;
+            lastHpQ    = hpQParam;
         }
-        if (std::abs(lpF - lastLpFreq) > 1.0f)
+        if (std::abs(lpF - lastLpFreq) > 0.5f || std::abs(lpQParam - lastLpQ) > 0.001f)
         {
-            auto c = juce::dsp::IIR::Coefficients<float>::makeLowPass(
-                currentSampleRate, juce::jlimit(2000.0f, 20000.0f, lpF));
+            auto c = makeLowPassWithQ(currentSampleRate,
+                                      juce::jlimit(2000.0f, 20000.0f, lpF),
+                                      lpQParam);
             lpFilter[0].coefficients = c;
             lpFilter[1].coefficients = c;
             lastLpFreq = lpF;
+            lastLpQ    = lpQParam;
         }
 
-        // ── 1. HP filter ──
+        // 1. HP filter
         left [i] = hpFilter[0].processSample(left [i]);
         right[i] = hpFilter[1].processSample(right[i]);
 
-        // ── 2. LP filter ──
+        // 2. LP filter
         left [i] = lpFilter[0].processSample(left [i]);
         right[i] = lpFilter[1].processSample(right[i]);
 
-        // ── 3. COMPRESSORE peak-detector stereo-linked ──
+        // 3. Compressore
         const float peak   = std::max(std::abs(left[i]), std::abs(right[i]));
         const float peakDB = (peak > 1e-6f) ? juce::Decibels::gainToDecibels(peak) : -120.0f;
 
@@ -233,24 +268,23 @@ void StereoCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
         grAccum += envDB;
 
-        // ── 4. HABISSO — waveshaper tipo tape (tanh saturation) ──
-        const float hab01 = habissoSmoothed.getNextValue() * 0.01f; // 0..1
+        // 4. HABISS waveshaper (tanh saturation)
+        const float hab01 = habissSmoothed.getNextValue() * 0.01f;
         if (hab01 > 0.001f)
         {
             const float drive = 1.0f + hab01 * 6.0f;
             const float norm  = std::tanh(drive);
             left [i] = std::tanh(left [i] * drive) / norm;
             right[i] = std::tanh(right[i] * drive) / norm;
-            // Leggera compensazione di livello (tanh aumenta l'energia percepita)
             const float comp = 1.0f - hab01 * 0.18f;
             left [i] *= comp;
             right[i] *= comp;
         }
 
-        // ── 5. STEREO WIDENER (M/S) ──
+        // 5. Stereo widener M/S (Paralarva)
         const float mid  = (left[i] + right[i]) * 0.5f;
         float       side = (left[i] - right[i]) * 0.5f;
-        side *= width;
+        side *= paralarva;
         left [i] = mid + side;
         right[i] = mid - side;
     }

@@ -31,7 +31,7 @@ juce_add_plugin(StereoCompressor
     PLUGIN_MANUFACTURER_CODE Mypl
     PLUGIN_CODE             Scmp
     FORMATS                 AU VST3
-    PRODUCT_NAME            "Stereo Compressor"
+    PRODUCT_NAME            "NEMO"
     IS_SYNTH                FALSE
     NEEDS_MIDI_INPUT        FALSE
     NEEDS_MIDI_OUTPUT       FALSE
@@ -60,6 +60,10 @@ target_compile_definitions(StereoCompressor PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
+    # On Linux: disable ALSA so libasound2-dev is not required.
+    # For a VST3/AU plugin the host owns audio I/O; the audio-device layer is unused.
+    $<$<PLATFORM_ID:Linux>:JUCE_ALSA=0>
+    $<$<PLATFORM_ID:Linux>:JUCE_JACK=0>
 )
 
 target_link_libraries(StereoCompressor PRIVATE

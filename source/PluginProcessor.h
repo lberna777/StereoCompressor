@@ -14,7 +14,7 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override { return "Stereo Compressor"; }
+    const juce::String getName() const override { return "NEMO"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
@@ -38,13 +38,16 @@ public:
     float  getCurrentLpFreq()         const { return displayedLp.load(); }
     double getCurrentSampleRate()     const { return currentSampleRate; }
 
-    static float ratioFromIndex(int idx);
+    // Coefficient builders pubblici (usati anche da FreqResponseDisplay)
+    static juce::dsp::IIR::Coefficients<float>::Ptr
+        makeHighPassWithQ(double sr, float freq, float Q);
+    static juce::dsp::IIR::Coefficients<float>::Ptr
+        makeLowPassWithQ (double sr, float freq, float Q);
 
     // ── FFT FIFO (input pre-filtri, consumato dall'editor) ──
     static constexpr int kFFTOrder = 11;
     static constexpr int kFFTSize  = 1 << kFFTOrder;   // 2048
 
-    // Returns true and fills dst (kFFTSize floats) if a fresh block is ready.
     bool consumeFFTBlock(float* dst);
 
 private:
@@ -57,24 +60,22 @@ private:
 
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-    // Compressore (envelope follower esponenziale)
     float envDB { 0.0f };
     float attackCoeff  { 0.0f };
     float releaseCoeff { 0.0f };
     double currentSampleRate { 44100.0 };
 
-    // Filtri HP / LP (Butterworth 2° ord. — uno per canale)
     juce::dsp::IIR::Filter<float> hpFilter[2];
     juce::dsp::IIR::Filter<float> lpFilter[2];
     float lastHpFreq { -1.0f };
     float lastLpFreq { -1.0f };
+    float lastHpQ    {  0.0f };
+    float lastLpQ    {  0.0f };
 
-    // Smoothing per parametri continui (evita zipper noise)
     juce::SmoothedValue<float> hpFreqSmoothed;
     juce::SmoothedValue<float> lpFreqSmoothed;
-    juce::SmoothedValue<float> habissoSmoothed;
+    juce::SmoothedValue<float> habissSmoothed;
 
-    // Stato esposto all'editor
     std::atomic<float> currentGR     { 0.0f };
     std::atomic<float> inputLevels[2];
     std::atomic<float> outputLevels[2];

@@ -1,0 +1,16 @@
+{
+  "output": {
+    "style": "markdown",
+    "filePath": ".context.md",
+    "removeComments": false
+  },
+  "ignore": {
+    "useGitignore": true,
+    "customPatterns": [
+      "build-linux/**",
+      "build/**",
+      "*.zip",
+      ".context.md"
+    ]
+  }
+}

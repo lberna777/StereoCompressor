@@ -3,14 +3,12 @@
 #include "PluginProcessor.h"
 #include "LookAndFeel.h"
 
-// ── Componente custom: spettro input + filter response + GR overlay ──
-class FreqResponseDisplay : public juce::Component,
-                             private juce::Timer
+// ── FreqResponseDisplay ─────────────────────────────────────────────────────
+class FreqResponseDisplay : public juce::Component, private juce::Timer
 {
 public:
     explicit FreqResponseDisplay(StereoCompressorProcessor& p);
     ~FreqResponseDisplay() override;
-
     void paint(juce::Graphics&) override;
 
 private:
@@ -18,7 +16,6 @@ private:
 
     StereoCompressorProcessor& processor;
 
-    // FFT plumbing
     juce::dsp::FFT fft { StereoCompressorProcessor::kFFTOrder };
     juce::dsp::WindowingFunction<float> window {
         (size_t) StereoCompressorProcessor::kFFTSize,
@@ -27,20 +24,16 @@ private:
 
     static constexpr int kBins = 160;
     std::array<float, kBins> spectrumDB {};
-
     float displayedGR { 0.0f };
 };
 
-// ── Meter verticale stereo (I o O) ──
-class VerticalMeter : public juce::Component,
-                       private juce::Timer
+// ── VerticalMeter ───────────────────────────────────────────────────────────
+class VerticalMeter : public juce::Component, private juce::Timer
 {
 public:
     enum Side { Input, Output };
-
     VerticalMeter(StereoCompressorProcessor& p, Side s);
     ~VerticalMeter() override;
-
     void paint(juce::Graphics&) override;
 
 private:
@@ -56,7 +49,35 @@ private:
     int   peakHoldCountR { 0 };
 };
 
-// ── Editor principale ──
+// ── OctopusDisplay ──────────────────────────────────────────────────────────
+class OctopusDisplay : public juce::Component
+{
+public:
+    explicit OctopusDisplay(StereoCompressorProcessor& p);
+
+    // Chiamata dal timerCallback() dell'editor ogni 30 Hz
+    void update(float eqAggr, float widthNorm, float comprNorm, float habNorm);
+
+    void paint(juce::Graphics&) override;
+
+private:
+    float smoothEqAggr    { 0.0f };
+    float smoothWidthNorm { 0.5f };
+    float smoothCompr     { 0.0f };
+    float smoothHab       { 0.0f };
+    float wavePhase       { 0.0f };
+
+    void paintBackground   (juce::Graphics&);
+    void paintWaterSurface (juce::Graphics&, float waterY);
+    void paintOctopusHead  (juce::Graphics&, float cx, float headY, float compr);
+    void paintTentacle     (juce::Graphics&, int index, float cx, float baseY,
+                            float aggr, float waterY);
+    void paintSuctionCups  (juce::Graphics&, const juce::Path& path, float aggr);
+
+    StereoCompressorProcessor& processor;
+};
+
+// ── StereoCompressorEditor ──────────────────────────────────────────────────
 class StereoCompressorEditor : public juce::AudioProcessorEditor,
                                 private juce::Timer
 {
@@ -69,7 +90,10 @@ public:
 
 private:
     void timerCallback() override;
-    void paintTentacleIcon(juce::Graphics& g, juce::Rectangle<int> bounds, float intensity);
+    void updateOctopusParameters();
+    void paintParalarvaIcon(juce::Graphics& g,
+                            juce::Rectangle<int> bounds,
+                            float paralarvaVal);
 
     StereoCompressorProcessor& processor;
     NeomodernLookAndFeel lnf;
@@ -81,24 +105,17 @@ private:
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
     };
 
-    KnobGroup hpFreq, lpFreq;
-    KnobGroup threshold, attack, release, makeup;
-    KnobGroup habisso, width;
+    KnobGroup hpFreq, hpQ;
+    KnobGroup lpFreq, lpQ;
+    KnobGroup threshold, ratio, attack, release, makeup;
+    KnobGroup habiss, paralarva;
 
-    // Ratio 1176-style
-    juce::TextButton ratioButtons[4];
-    juce::Label      ratioLabel;
-
-    // Display + meter
     FreqResponseDisplay freqDisplay;
     VerticalMeter       inMeter;
     VerticalMeter       outMeter;
+    OctopusDisplay      octopusDisplay;
 
-    // Per evitare repaint inutili del tentacolo
-    float lastHabissoVisual { -1.0f };
-
-    // Rect dove disegnare il tentacolo (calcolato in resized())
-    juce::Rectangle<int> tentacleArea;
+    juce::Rectangle<int> paralarvaIconArea;
 
     void setupKnob(KnobGroup& g, const juce::String& paramID, const juce::String& name);
 

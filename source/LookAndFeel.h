@@ -1,8 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
 
-// Custom look-and-feel ispirato ad Acustica DOVE: pannello chiaro brushed,
-// knob scuri lucidi con anello indicatore ciano, pulsanti stile 1176.
 class NeomodernLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
@@ -25,7 +23,7 @@ public:
 
     juce::Font getLabelFont(juce::Label&) override;
 
-    // ── Palette ──
+    // ── Palette dark/trap ──
     static const juce::Colour PANEL_LIGHT;
     static const juce::Colour PANEL_LIGHT_HI;
     static const juce::Colour PANEL_DARK;
@@ -39,4 +37,6 @@ public:
     static const juce::Colour METER_GREEN;
     static const juce::Colour METER_YELLOW;
     static const juce::Colour METER_RED;
+    static const juce::Colour OCEAN_DEEP;
+    static const juce::Colour WATER_SURFACE;
 };

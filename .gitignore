@@ -5,3 +5,5 @@ build/
 xcuserdata/
 DerivedData/
 JuceLibraryCode/
+.context.md
+build-linux/

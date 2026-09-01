@@ -1,18 +1,21 @@
 #include "LookAndFeel.h"
 
-const juce::Colour NeomodernLookAndFeel::PANEL_LIGHT    { 0xffd6dbe0 };
-const juce::Colour NeomodernLookAndFeel::PANEL_LIGHT_HI { 0xffe4e8ec };
-const juce::Colour NeomodernLookAndFeel::PANEL_DARK     { 0xff242830 };
-const juce::Colour NeomodernLookAndFeel::ACCENT_CYAN    { 0xff7dc8e8 };
-const juce::Colour NeomodernLookAndFeel::ACCENT_CYAN_DIM{ 0xff4e8aa6 };
-const juce::Colour NeomodernLookAndFeel::KNOB_BODY      { 0xff1c2025 };
-const juce::Colour NeomodernLookAndFeel::KNOB_BODY_HI   { 0xff3a4048 };
-const juce::Colour NeomodernLookAndFeel::KNOB_RIM       { 0xff9098a2 };
-const juce::Colour NeomodernLookAndFeel::TEXT_DARK      { 0xff222428 };
-const juce::Colour NeomodernLookAndFeel::TEXT_MUTED     { 0xff6a7178 };
-const juce::Colour NeomodernLookAndFeel::METER_GREEN    { 0xff7dc8e8 };
-const juce::Colour NeomodernLookAndFeel::METER_YELLOW   { 0xfff0c060 };
-const juce::Colour NeomodernLookAndFeel::METER_RED      { 0xfff04860 };
+// ── Palette dark/trap ──────────────────────────────────────────────────────
+const juce::Colour NeomodernLookAndFeel::PANEL_LIGHT    { 0xff141820 };
+const juce::Colour NeomodernLookAndFeel::PANEL_LIGHT_HI { 0xff1e2430 };
+const juce::Colour NeomodernLookAndFeel::PANEL_DARK     { 0xff0a0d12 };
+const juce::Colour NeomodernLookAndFeel::ACCENT_CYAN    { 0xff00e5c8 };
+const juce::Colour NeomodernLookAndFeel::ACCENT_CYAN_DIM{ 0xff007a6a };
+const juce::Colour NeomodernLookAndFeel::KNOB_BODY      { 0xff0c1018 };
+const juce::Colour NeomodernLookAndFeel::KNOB_BODY_HI   { 0xff1a2230 };
+const juce::Colour NeomodernLookAndFeel::KNOB_RIM       { 0xff243040 };
+const juce::Colour NeomodernLookAndFeel::TEXT_DARK      { 0xffe0ecea };
+const juce::Colour NeomodernLookAndFeel::TEXT_MUTED     { 0xff4a6a68 };
+const juce::Colour NeomodernLookAndFeel::METER_GREEN    { 0xff00e5c8 };
+const juce::Colour NeomodernLookAndFeel::METER_YELLOW   { 0xffffb020 };
+const juce::Colour NeomodernLookAndFeel::METER_RED      { 0xffff2a4a };
+const juce::Colour NeomodernLookAndFeel::OCEAN_DEEP     { 0xff060810 };
+const juce::Colour NeomodernLookAndFeel::WATER_SURFACE  { 0xff1a4a5a };
 
 NeomodernLookAndFeel::NeomodernLookAndFeel()
 {
@@ -34,70 +37,70 @@ void NeomodernLookAndFeel::drawRotarySlider(juce::Graphics& g,
                                               float rotaryEndAngle,
                                               juce::Slider&)
 {
-    const float diameter = (float) juce::jmin(width, height) - 12.0f;
-    const float radius   = diameter * 0.5f;
-    const float cx       = (float) x + (float) width  * 0.5f;
-    const float cy       = (float) y + (float) height * 0.5f;
-    const float angle    = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
+    const float cx = (float)x + (float)width  * 0.5f;
+    const float cy = (float)y + (float)height * 0.5f;
 
-    // ── Anello esterno (rim metallico) ──
-    {
-        juce::ColourGradient rimGrad(KNOB_RIM.brighter(0.3f), cx, cy - radius - 4,
-                                      KNOB_RIM.darker(0.4f),  cx, cy + radius + 4, false);
-        g.setGradientFill(rimGrad);
-        g.fillEllipse(cx - radius - 3, cy - radius - 3, (radius + 3) * 2, (radius + 3) * 2);
-    }
+    // P19 Igloo style: large outer arc, smaller knob body
+    const float outerR = (float)juce::jmin(width, height) * 0.46f;
+    const float bodyR  = outerR * 0.58f;
+    const float angle  = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
 
-    // ── Drop shadow soft sotto al corpo del knob ──
+    // ── Arc track (sfondo, ferro di cavallo) ──
     {
-        g.setColour(juce::Colours::black.withAlpha(0.18f));
-        g.fillEllipse(cx - radius + 1, cy - radius + 3, radius * 2, radius * 2);
-    }
-
-    // ── Corpo del knob (gradiente verticale dark) ──
-    {
-        juce::ColourGradient bodyGrad(KNOB_BODY_HI, cx, cy - radius * 0.8f,
-                                       KNOB_BODY,   cx, cy + radius * 0.9f, false);
-        g.setGradientFill(bodyGrad);
-        g.fillEllipse(cx - radius, cy - radius, radius * 2, radius * 2);
-    }
-
-    // ── Highlight sottile in alto ──
-    {
-        g.setColour(juce::Colours::white.withAlpha(0.08f));
-        const float hlW = radius * 1.3f;
-        const float hlH = radius * 0.55f;
-        g.fillEllipse(cx - hlW * 0.5f, cy - radius * 0.95f, hlW, hlH);
-    }
-
-    // ── Arco indicatore di posizione (ciano) ──
-    {
-        const float arcR = radius + 5.0f;
         juce::Path bgArc;
-        bgArc.addCentredArc(cx, cy, arcR, arcR, 0.0f,
+        bgArc.addCentredArc(cx, cy, outerR, outerR, 0.0f,
                             rotaryStartAngle, rotaryEndAngle, true);
-        g.setColour(ACCENT_CYAN_DIM.withAlpha(0.35f));
-        g.strokePath(bgArc, juce::PathStrokeType(2.0f, juce::PathStrokeType::curved,
-                                                  juce::PathStrokeType::rounded));
+        g.setColour(KNOB_RIM.withAlpha(0.5f));
+        g.strokePath(bgArc, juce::PathStrokeType(5.0f, juce::PathStrokeType::curved,
+                                                   juce::PathStrokeType::rounded));
+    }
 
+    // ── Arc fill (valore corrente, ciano neon) ──
+    {
         juce::Path fgArc;
-        fgArc.addCentredArc(cx, cy, arcR, arcR, 0.0f,
+        fgArc.addCentredArc(cx, cy, outerR, outerR, 0.0f,
                             rotaryStartAngle, angle, true);
         g.setColour(ACCENT_CYAN);
-        g.strokePath(fgArc, juce::PathStrokeType(2.5f, juce::PathStrokeType::curved,
-                                                  juce::PathStrokeType::rounded));
+        g.strokePath(fgArc, juce::PathStrokeType(5.0f, juce::PathStrokeType::curved,
+                                                   juce::PathStrokeType::rounded));
     }
 
-    // ── Indicatore (linea ciano dal centro verso il bordo) ──
+    // ── Rim metallico intorno al corpo ──
     {
-        const float ptrLength = radius * 0.62f;
-        const float ptrWidth  = 3.0f;
+        juce::ColourGradient rimGrad(KNOB_RIM.brighter(0.2f), cx, cy - bodyR - 3,
+                                      KNOB_RIM.darker(0.3f),  cx, cy + bodyR + 3, false);
+        g.setGradientFill(rimGrad);
+        g.fillEllipse(cx - bodyR - 2, cy - bodyR - 2, (bodyR + 2) * 2, (bodyR + 2) * 2);
+    }
+
+    // ── Drop shadow ──
+    {
+        g.setColour(juce::Colours::black.withAlpha(0.25f));
+        g.fillEllipse(cx - bodyR + 1, cy - bodyR + 3, bodyR * 2, bodyR * 2);
+    }
+
+    // ── Corpo del knob ──
+    {
+        juce::ColourGradient bodyGrad(KNOB_BODY_HI, cx, cy - bodyR * 0.8f,
+                                       KNOB_BODY,   cx, cy + bodyR * 0.9f, false);
+        g.setGradientFill(bodyGrad);
+        g.fillEllipse(cx - bodyR, cy - bodyR, bodyR * 2, bodyR * 2);
+    }
+
+    // ── Highlight ──
+    {
+        g.setColour(juce::Colours::white.withAlpha(0.07f));
+        const float hlW = bodyR * 1.2f;
+        const float hlH = bodyR * 0.5f;
+        g.fillEllipse(cx - hlW * 0.5f, cy - bodyR * 0.90f, hlW, hlH);
+    }
+
+    // ── Indicatore (linea ciano) ──
+    {
+        const float ptrLen = bodyR * 0.60f;
+        const float ptrW   = 2.5f;
         juce::Path ptr;
-        ptr.addRoundedRectangle(-ptrWidth * 0.5f,
-                                 -radius + 6.0f,
-                                  ptrWidth,
-                                  ptrLength,
-                                  1.5f);
+        ptr.addRoundedRectangle(-ptrW * 0.5f, -bodyR + 5.0f, ptrW, ptrLen, 1.2f);
         ptr.applyTransform(juce::AffineTransform::rotation(angle).translated(cx, cy));
         g.setColour(ACCENT_CYAN);
         g.fillPath(ptr);
@@ -105,7 +108,7 @@ void NeomodernLookAndFeel::drawRotarySlider(juce::Graphics& g,
 }
 
 void NeomodernLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& button,
-                                                  const juce::Colour& /*backgroundColour*/,
+                                                  const juce::Colour&,
                                                   bool shouldDrawButtonAsHighlighted,
                                                   bool shouldDrawButtonAsDown)
 {
@@ -121,26 +124,21 @@ void NeomodernLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button&
     g.setGradientFill(grad);
     g.fillRoundedRectangle(bounds, 4.0f);
 
-    // Bordo
     g.setColour(on ? ACCENT_CYAN.brighter(0.2f) : KNOB_RIM.darker(0.2f));
     g.drawRoundedRectangle(bounds, 4.0f, 1.0f);
 
     if (on)
     {
-        // Inner glow
         g.setColour(ACCENT_CYAN.withAlpha(0.55f));
         g.drawRoundedRectangle(bounds.reduced(1.8f), 3.0f, 1.0f);
     }
 }
 
 void NeomodernLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& button,
-                                            bool /*shouldDrawButtonAsHighlighted*/,
-                                            bool shouldDrawButtonAsDown)
+                                            bool, bool shouldDrawButtonAsDown)
 {
     const bool on = button.getToggleState() || shouldDrawButtonAsDown;
     g.setColour(on ? juce::Colours::white : TEXT_MUTED);
     g.setFont(juce::Font(12.0f, juce::Font::bold));
-    g.drawText(button.getButtonText(),
-               button.getLocalBounds(),
-               juce::Justification::centred);
+    g.drawText(button.getButtonText(), button.getLocalBounds(), juce::Justification::centred);
 }
